@@ -5,5 +5,4 @@
 *.xlsx
 *.rds
 *.html
-data/*
 .Rproj.user
