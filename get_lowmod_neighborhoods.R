@@ -47,7 +47,7 @@ mapviewOptions(fgb = FALSE)
 mapshot(
   m,
   remove_controls = c("homeButton", "layersControl", "zoomControl"),
-  file = "lowmod_blkgrps_sf.png"
+  file = "img/lowmod_blkgrps_sf.png"
 )
 
 # Get tracts w/Analysis Neighborhoods from DataSF, Re-align Parkside
@@ -101,4 +101,4 @@ m <- ggplot(lmod_nhoods) +
   theme_void() +
   theme(legend.position = "none")
 
-ggsave("low-mod-neighborhoods.png", plot = m, height = 6, width = 6)
+ggsave("img/low-mod-neighborhoods.png", plot = m, height = 6, width = 6)
