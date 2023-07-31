@@ -2,4 +2,15 @@
 
 This repo contains the data and code behind [OEWD's Low-to Moderate Income Neighborhoods.](https://sfgov.maps.arcgis.com/apps/webappviewer/index.html?id=02dfc61fc8a44e5c878cef9a5a2b3c86)
 
+## Low-Mod Block Groups
+
+![](lowmod_blkgrps_sf.png)
+
+## Low-Mod Neighborhoods
+
 ![](low-mod-neighborhoods.png)
+
+## Data
+
+* HUD
+* TIGER (via {tigris})
