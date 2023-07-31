@@ -37,11 +37,16 @@ lowmod_blkgrps_sf <- sf_blkgrps %>%
 
 # st_write(lowmod_blkgrps_sf, "data/LMOD Eligible Block Groups (2010).shp", delete_layer = TRUE)
 
-m <- mapview(lowmod_blkgrps_sf, layer.name = "LowMod Block Groups")
+m <- mapview(
+  lowmod_blkgrps_sf,
+  layer.name = "LowMod Block Groups",
+  alpha.regions = 0.6,
+  col.regions = "#7d61b3"
+  )
 mapviewOptions(fgb = FALSE)
 mapshot(
   m,
-  remove_controls = c("homeButton", "layersControl"),
+  remove_controls = c("homeButton", "layersControl", "zoomControl"),
   file = "lowmod_blkgrps_sf.png"
 )
 
