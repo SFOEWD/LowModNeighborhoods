@@ -7,44 +7,15 @@ library(fs)
 library(arcgisbinding)
 arc.check_product()
 
-multipolygon_to_largest_polygon <- function(x) {
-  polygons <- st_cast(x, "POLYGON")
-  out <- polygons[which.max(st_area(polygons)),]
-  return(out)
-}
+# multipolygon_to_largest_polygon <- function(x) {
+#   polygons <- st_cast(x, "POLYGON")
+#   out <- polygons[which.max(st_area(polygons)),]
+#   return(out)
+# }
 
 # Downloaded from HUD: https://www.hudexchange.info/programs/acs-low-mod-summary-data
 lmisd_raw <- readxl::read_excel("data/ACS-2015-Low-Mod-Summarized-All-2023.xlsx")
 lmisd_sf <- lmisd_raw %>% filter(COUNTYNAME == "San Francisco County")
-
-# Get block groups from DataSF
-# Cf. https://data.sfgov.org/Geographic-Locations-and-Boundaries/Census-2000-Block-Groups-for-San-Francisco-no-wate/wymm-gfht
-# sf_blkgrps <- st_read("https://data.sfgov.org/api/geospatial/2uzy-uv2r?method=export&format=GeoJSON") %>%
-#   mutate(
-#     geoid = paste0("15000US0", geoid),
-#     tractce = paste0("0", tractce)
-#   )
-
-# Get 2010 block groups from Census
-sf_blkgrps <- block_groups(
-  state = "CA",
-  county = "San Francisco",
-  year = 2010
-)
-
-lmod_blkgrps <- sf_blkgrps %>%
-  left_join(
-    lmisd_sf,
-    join_by(
-      TRACTCE10 == TRACT,
-      BLKGRPCE10 == BLKGRP
-    )
-  ) %>%
-  filter(LOWMODPCT > 0.51) %>%
-  st_transform("EPSG:7131") %>%
-  erase_water()
-
-# st_write(lowmod_blkgrps_sf, "data/LMOD Eligible Block Groups (2010).shp", delete_layer = TRUE)
 
 # Get tracts w/Analysis Neighborhoods from DataSF, Re-align Parkside
 # Cf. https://data.sfgov.org/Geographic-Locations-and-Boundaries/Analysis-Neighborhoods/p5b7-5n3h
@@ -65,7 +36,40 @@ tracts_w_neighborhoods <- st_read("https://data.sfgov.org/api/geospatial/bwbp-wk
   mutate(nhood = recode(nhood, `Sunset/Parkside` = "Sunset"))
 # st_write(tracts_w_neighborhoods, "data/sf_neighborhoods.shp", delete_layer = TRUE)
 
-lmod_nhoods <- tracts_w_neighborhoods %>%
+# SF outline
+sf_outline <- tracts_w_neighborhoods %>%
+  summarize() %>%
+  st_transform("EPSG:7131")
+
+# Get block groups from DataSF
+# Cf. https://data.sfgov.org/Geographic-Locations-and-Boundaries/Census-2000-Block-Groups-for-San-Francisco-no-wate/wymm-gfht
+# sf_blkgrps <- st_read("https://data.sfgov.org/api/geospatial/2uzy-uv2r?method=export&format=GeoJSON") %>%
+#   mutate(
+#     geoid = paste0("15000US0", geoid),
+#     tractce = paste0("0", tractce)
+#   )
+
+# Get 2010 block groups from Census
+# Erase water, cookie-cut to SF
+sf_blkgrps <- block_groups(
+  state = "CA",
+  county = "San Francisco",
+  year = 2010
+) %>%
+  left_join(
+    lmisd_sf,
+    join_by(
+      TRACTCE10 == TRACT,
+      BLKGRPCE10 == BLKGRP
+    )
+  ) %>%
+  st_transform("EPSG:7131") %>%
+  st_intersection(st_union(sf_outline))
+
+lmod_blkgrps <- sf_blkgrps %>% filter(LOWMODPCT > 0.51)
+# st_write(lmod_blkgrps, "data/LMOD Eligible Block Groups (2010).shp", delete_layer = TRUE)
+
+sf_nhoods <- tracts_w_neighborhoods %>%
   left_join(
     lmisd_sf,
     join_by(tractce10 == TRACT),
@@ -78,14 +82,15 @@ lmod_nhoods <- tracts_w_neighborhoods %>%
     LOWMODUNIV = sum(LOWMODUNIV),
     LOWMODPCT = LOWMOD / LOWMODUNIV
   ) %>%
-  ungroup() %>%
+  ungroup()
+
+lmod_nhoods <- sf_nhoods %>%
   filter(LOWMODPCT > 0.51) %>%
   select(nhood, LOWMODPCT)
-
 # st_write(lmod_nhoods, "data/LMOD Eligible Neighborhoods.shp", delete_layer = TRUE)
 # mapview::mapview(lmod_nhoods, zcol = "LOWMODPCT")
 
-lmod_tracts <- tracts_w_neighborhoods %>%
+sf_tracts <- tracts_w_neighborhoods %>%
   left_join(
     lmisd_sf,
     join_by(tractce10 == TRACT),
@@ -97,14 +102,15 @@ lmod_tracts <- tracts_w_neighborhoods %>%
     LOWMODUNIV = sum(LOWMODUNIV),
     LOWMODPCT = LOWMOD / LOWMODUNIV
   ) %>%
-  ungroup() %>%
+  ungroup()
+
+lmod_tracts <- sf_tracts %>%
   filter(LOWMODPCT > 0.51) %>%
   select(tractce10, LOWMODPCT)
 
 # Write to ArcGIS
 # Low-to Moderate Income Neighborhoods
 # North Shore (12th element) to one polygon
-lmod_nhoods[12,] <- multipolygon_to_largest_polygon(lmod_nhoods[12,])
 arc.write(
   path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/lowmod_neighborhoods"),
   data = lmod_nhoods,
@@ -112,10 +118,15 @@ arc.write(
   validate = TRUE
 )
 
+# All neighborhoods
+arc.write(
+  path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/sf_neighborhoods"),
+  data = sf_nhoods %>% select(nhood, LOWMODPCT),
+  overwrite = TRUE,
+  validate = TRUE
+)
+
 # Low-to Moderate Income Census Tracts
-# 1st and 104th elements are MULTIPOLYGON
-lmod_tracts[1,] <- multipolygon_to_largest_polygon(lmod_tracts[1,])
-lmod_tracts[104,] <- multipolygon_to_largest_polygon(lmod_tracts[104,])
 arc.write(
   path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/lowmod_tracts"),
   data = lmod_tracts,
@@ -123,13 +134,28 @@ arc.write(
   validate = TRUE
 )
 
+# All tracts
+arc.write(
+  path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/sf_tracts"),
+  data = sf_tracts %>% select(tractce10, LOWMODPCT),
+  overwrite = TRUE,
+  validate = TRUE
+)
+
 # Low-to Moderate Income Census Blocks
 # Keep only Treasure Island (3rd element) from MULTIPOLYGON
-lmod_blkgrps[3,] <- multipolygon_to_largest_polygon(lmod_blkgrps[3,])
 arc.write(
   path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/lowmod_blockgroups"),
   data = lmod_blkgrps %>% select(tractce10 = TRACTCE10, blkgrp = BLKGRPCE10, LOWMODPCT),
   overwrite = TRUE
+)
+
+# All block groups
+arc.write(
+  path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/sf_blockgroups"),
+  data = sf_blkgrps %>% select(tractce10 = TRACTCE10, blkgrp = BLKGRPCE10, LOWMODPCT),
+  overwrite = TRUE,
+  validate = TRUE
 )
 
 # Make maps
