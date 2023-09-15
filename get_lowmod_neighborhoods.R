@@ -3,6 +3,15 @@ library(mapview)
 library(tigris)
 library(tidycensus)
 library(tidyverse)
+library(fs)
+library(arcgisbinding)
+arc.check_product()
+
+multipolygon_to_largest_polygon <- function(x) {
+  polygons <- st_cast(x, "POLYGON")
+  out <- polygons[which.max(st_area(polygons)),]
+  return(out)
+}
 
 # Downloaded from HUD: https://www.hudexchange.info/programs/acs-low-mod-summary-data
 lmisd_raw <- readxl::read_excel("data/ACS-2015-Low-Mod-Summarized-All-2023.xlsx")
@@ -23,7 +32,7 @@ sf_blkgrps <- block_groups(
   year = 2010
 )
 
-lowmod_blkgrps_sf <- sf_blkgrps %>%
+lmod_blkgrps <- sf_blkgrps %>%
   left_join(
     lmisd_sf,
     join_by(
@@ -36,19 +45,6 @@ lowmod_blkgrps_sf <- sf_blkgrps %>%
   erase_water()
 
 # st_write(lowmod_blkgrps_sf, "data/LMOD Eligible Block Groups (2010).shp", delete_layer = TRUE)
-
-m <- mapview(
-  lowmod_blkgrps_sf,
-  layer.name = "LowMod Block Groups",
-  alpha.regions = 0.6,
-  col.regions = "#7d61b3"
-  )
-mapviewOptions(fgb = FALSE)
-mapshot(
-  m,
-  remove_controls = c("homeButton", "layersControl", "zoomControl"),
-  file = "img/lowmod_blkgrps_sf.png"
-)
 
 # Get tracts w/Analysis Neighborhoods from DataSF, Re-align Parkside
 # Cf. https://data.sfgov.org/Geographic-Locations-and-Boundaries/Analysis-Neighborhoods/p5b7-5n3h
@@ -83,10 +79,72 @@ lmod_nhoods <- tracts_w_neighborhoods %>%
     LOWMODPCT = LOWMOD / LOWMODUNIV
   ) %>%
   ungroup() %>%
+  filter(LOWMODPCT > 0.51) %>%
   select(nhood, LOWMODPCT)
 
 # st_write(lmod_nhoods, "data/LMOD Eligible Neighborhoods.shp", delete_layer = TRUE)
 # mapview::mapview(lmod_nhoods, zcol = "LOWMODPCT")
+
+lmod_tracts <- tracts_w_neighborhoods %>%
+  left_join(
+    lmisd_sf,
+    join_by(tractce10 == TRACT),
+    multiple = "all" # multiple blkgrps per tract
+  ) %>%
+  group_by(tractce10) %>%
+  summarize(
+    LOWMOD = sum(LOWMOD),
+    LOWMODUNIV = sum(LOWMODUNIV),
+    LOWMODPCT = LOWMOD / LOWMODUNIV
+  ) %>%
+  ungroup() %>%
+  filter(LOWMODPCT > 0.51) %>%
+  select(tractce10, LOWMODPCT)
+
+# Write to ArcGIS
+# Low-to Moderate Income Neighborhoods
+# North Shore (12th element) to one polygon
+lmod_nhoods[12,] <- multipolygon_to_largest_polygon(lmod_nhoods[12,])
+arc.write(
+  path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/lowmod_neighborhoods"),
+  data = lmod_nhoods,
+  overwrite = TRUE,
+  validate = TRUE
+)
+
+# Low-to Moderate Income Census Tracts
+# 1st and 104th elements are MULTIPOLYGON
+lmod_tracts[1,] <- multipolygon_to_largest_polygon(lmod_tracts[1,])
+lmod_tracts[104,] <- multipolygon_to_largest_polygon(lmod_tracts[104,])
+arc.write(
+  path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/lowmod_tracts"),
+  data = lmod_tracts,
+  overwrite = TRUE,
+  validate = TRUE
+)
+
+# Low-to Moderate Income Census Blocks
+# Keep only Treasure Island (3rd element) from MULTIPOLYGON
+lmod_blkgrps[3,] <- multipolygon_to_largest_polygon(lmod_blkgrps[3,])
+arc.write(
+  path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/lowmod_blockgroups"),
+  data = lmod_blkgrps %>% select(tractce10 = TRACTCE10, blkgrp = BLKGRPCE10, LOWMODPCT),
+  overwrite = TRUE
+)
+
+# Make maps
+m <- mapview(
+  lmod_blkgrps,
+  layer.name = "LowMod Block Groups",
+  alpha.regions = 0.6,
+  col.regions = "#7d61b3"
+  )
+mapviewOptions(fgb = FALSE)
+mapshot(
+  m,
+  remove_controls = c("homeButton", "layersControl", "zoomControl"),
+  file = "img/lowmod_blkgrps_sf.png"
+)
 
 m <- ggplot(lmod_nhoods) +
   geom_sf(aes(fill = LOWMODPCT > 0.51), alpha = 0.6) +
