@@ -14,20 +14,23 @@ arc.check_product()
 # }
 
 # Downloaded from HUD: https://www.hudexchange.info/programs/acs-low-mod-summary-data
-lmisd_raw <- readxl::read_excel("data/ACS-2015-Low-Mod-Summarized-All-2023.xlsx")
+# lmisd_raw <- readxl::read_excel("data/ACS-2015-Low-Mod-Summarized-All-2023.xlsx")
+lmisd_raw <- readxl::read_excel("data/ACS-2020-Low-Mod-Block-Group-All.xlsx")
 lmisd_sf <- lmisd_raw %>% filter(COUNTYNAME == "San Francisco County")
 
 # Get tracts w/Analysis Neighborhoods from DataSF, Re-align Parkside
 # Cf. https://data.sfgov.org/Geographic-Locations-and-Boundaries/Analysis-Neighborhoods/p5b7-5n3h
-tracts_w_neighborhoods <- st_read("https://data.sfgov.org/api/geospatial/bwbp-wk3r?method=export&format=GeoJSON") %>%
-  select(tractce10, nhood) %>%
+tracts_w_neighborhoods <- st_read("https://data.sfgov.org/resource/sevw-6tgi.geojson") %>%
+  select(tractce, nhood = neighborhoods_analysis_boundaries) %>%
   mutate(nhood = ifelse(
-    tractce10 %in% c(
+    tractce %in% c(
       "035400",
       "035300",
       "032901",
       "032801",
       "033000",
+      "033001",
+      "033002",
       "033100"
     ),
     "Parkside",
@@ -54,25 +57,27 @@ sf_outline <- tracts_w_neighborhoods %>%
 sf_blkgrps <- block_groups(
   state = "CA",
   county = "San Francisco",
-  year = 2010
+  year = 2020
 ) %>%
   left_join(
     lmisd_sf,
     join_by(
-      TRACTCE10 == TRACT,
-      BLKGRPCE10 == BLKGRP
+      TRACTCE== TRACT,
+      BLKGRPCE == BLKGRP
     )
   ) %>%
   st_transform("EPSG:7131") %>%
   st_intersection(st_union(sf_outline))
 
-lmod_blkgrps <- sf_blkgrps %>% filter(LOWMODPCT > 0.51)
+lmod_blkgrps <- sf_blkgrps %>%
+  mutate(LOWMOD_PCT = as.numeric(gsub("%", "", LOWMOD_PCT))) %>%
+  filter(LOWMOD_PCT > 51)
 # st_write(lmod_blkgrps, "data/LMOD Eligible Block Groups (2010).shp", delete_layer = TRUE)
 
 sf_nhoods <- tracts_w_neighborhoods %>%
   left_join(
     lmisd_sf,
-    join_by(tractce10 == TRACT),
+    join_by(tractce == TRACT),
     multiple = "all" # multiple blkgrps per tract
   ) %>%
   # Dissolve tracts to neighborhoods
