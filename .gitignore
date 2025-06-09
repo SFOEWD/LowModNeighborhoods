@@ -2,7 +2,6 @@
 .RData
 .Ruserdata
 *.csv
-*.xlsx
 *.rds
 *.html
 .Rproj.user
