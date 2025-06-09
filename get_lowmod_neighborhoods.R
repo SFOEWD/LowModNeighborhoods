@@ -91,7 +91,10 @@ sf_nhoods <- tracts_w_neighborhoods %>%
   ungroup()
 
 lmod_nhoods <- sf_nhoods %>%
-  filter(LOWMODPCT > 0.51) %>%
+  filter(
+    LOWMODPCT > 0.51,
+    nhood != "Golden Gate Park"
+    ) %>%
   select(nhood, LOWMODPCT)
 # st_write(lmod_nhoods, "data/LMOD Eligible Neighborhoods.shp", delete_layer = TRUE)
 # mapview::mapview(lmod_nhoods, zcol = "LOWMODPCT")
