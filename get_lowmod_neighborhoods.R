@@ -93,7 +93,7 @@ sf_nhoods <- tracts_w_neighborhoods %>%
 lmod_nhoods <- sf_nhoods %>%
   filter(
     LOWMODPCT > 0.51,
-    nhood != "Golden Gate Park"
+    !nhood %in% c("Golden Gate Park", "McLaren Park")
     ) %>%
   select(nhood, LOWMODPCT)
 # st_write(lmod_nhoods, "data/LMOD Eligible Neighborhoods.shp", delete_layer = TRUE)
