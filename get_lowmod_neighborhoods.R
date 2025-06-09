@@ -80,6 +80,7 @@ sf_nhoods <- tracts_w_neighborhoods %>%
     join_by(tractce == TRACT),
     multiple = "all" # multiple blkgrps per tract
   ) %>%
+  mutate(across(c(LOWMOD, LOWMODUNIV), \(x) parse_number(x))) %>%
   # Dissolve tracts to neighborhoods
   group_by(nhood) %>%
   summarize(
@@ -98,10 +99,11 @@ lmod_nhoods <- sf_nhoods %>%
 sf_tracts <- tracts_w_neighborhoods %>%
   left_join(
     lmisd_sf,
-    join_by(tractce10 == TRACT),
+    join_by(tractce == TRACT),
     multiple = "all" # multiple blkgrps per tract
   ) %>%
-  group_by(tractce10) %>%
+  mutate(across(c(LOWMOD, LOWMODUNIV), \(x) parse_number(x))) %>%
+  group_by(tractce) %>%
   summarize(
     LOWMOD = sum(LOWMOD),
     LOWMODUNIV = sum(LOWMODUNIV),
@@ -111,13 +113,13 @@ sf_tracts <- tracts_w_neighborhoods %>%
 
 lmod_tracts <- sf_tracts %>%
   filter(LOWMODPCT > 0.51) %>%
-  select(tractce10, LOWMODPCT)
+  select(tractce, LOWMODPCT)
 
 # Write to ArcGIS
 # Low-to Moderate Income Neighborhoods
 # North Shore (12th element) to one polygon
 arc.write(
-  path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/lowmod_neighborhoods"),
+  path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/lowmod_neighborhoods_fy25"),
   data = lmod_nhoods,
   overwrite = TRUE,
   validate = TRUE
@@ -133,7 +135,7 @@ arc.write(
 
 # Low-to Moderate Income Census Tracts
 arc.write(
-  path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/lowmod_tracts"),
+  path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/lowmod_tracts_fy25"),
   data = lmod_tracts,
   overwrite = TRUE,
   validate = TRUE
@@ -142,7 +144,7 @@ arc.write(
 # All tracts
 arc.write(
   path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/sf_tracts"),
-  data = sf_tracts %>% select(tractce10, LOWMODPCT),
+  data = sf_tracts %>% select(tractce, LOWMODPCT),
   overwrite = TRUE,
   validate = TRUE
 )
@@ -150,15 +152,16 @@ arc.write(
 # Low-to Moderate Income Census Blocks
 # Keep only Treasure Island (3rd element) from MULTIPOLYGON
 arc.write(
-  path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/lowmod_blockgroups"),
-  data = lmod_blkgrps %>% select(tractce10 = TRACTCE10, blkgrp = BLKGRPCE10, LOWMODPCT),
-  overwrite = TRUE
+  path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/lowmod_blockgroups_fy25"),
+  data = lmod_blkgrps %>% select(tractce = TRACTCE, blkgrp = BLKGRPCE, LOWMOD_PCT),
+  overwrite = TRUE,
+  validate = TRUE
 )
 
 # All block groups
 arc.write(
   path = path(Sys.getenv("ARCGIS_PROJECTS_PATH"), "CDBG Eligibility/CDBG Eligibility.gdb/sf_blockgroups"),
-  data = sf_blkgrps %>% select(tractce10 = TRACTCE10, blkgrp = BLKGRPCE10, LOWMODPCT),
+  data = sf_blkgrps %>% select(tractce = TRACTCE, blkgrp = BLKGRPCE, LOWMOD_PCT),
   overwrite = TRUE,
   validate = TRUE
 )
@@ -174,7 +177,7 @@ mapviewOptions(fgb = FALSE)
 mapshot(
   m,
   remove_controls = c("homeButton", "layersControl", "zoomControl"),
-  file = "img/lowmod_blkgrps_sf.png"
+  file = "img/lowmod_blkgrps_sf_fy25.png"
 )
 
 m <- ggplot(lmod_nhoods) +
@@ -186,8 +189,8 @@ m <- ggplot(lmod_nhoods) +
     min.segment.length = 0
   ) +
   labs(fill = NULL) +
-  scale_fill_manual(values = c("grey", "#7d61b3"), labels = c("Not Low-Mod", "Low-Mod")) +
+  scale_fill_manual(values = rev(c("grey", "#7d61b3")), labels = c("Not Low-Mod", "Low-Mod")) +
   theme_void() +
   theme(legend.position = "none")
 
-ggsave("img/low-mod-neighborhoods.png", plot = m, height = 6, width = 6)
+ggsave("img/low-mod-neighborhoods_fy25.png", plot = m, height = 6, width = 6)
