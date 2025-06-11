@@ -4,11 +4,11 @@ This repo contains the data and code behind [OEWD's Low-to Moderate Income Neigh
 
 ## Low-Mod Block Groups
 
-![](img/lowmod_blkgrps_sf.png)
+![](img/lowmod_blkgrps_sf_fy25.png)
 
 ## Low-Mod Neighborhoods
 
-![](img/low-mod-neighborhoods.png)
+![](img/low-mod-neighborhoods_fy25.png)
 
 ## Data
 
